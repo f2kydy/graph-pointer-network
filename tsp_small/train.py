@@ -65,6 +65,8 @@ if __name__ == "__main__":
     # R_mean = []
     # R_std = []
     for epoch in range(n_epoch):
+        # 训练
+        model.train()
         for i in tqdm(range(steps)):
             optimizer.zero_grad()
         
@@ -109,7 +111,7 @@ if __name__ == "__main__":
             R += torch.norm(Y1-Y_ini, dim=1)
             
             
-            # self-critic base line
+            # self-critic baseline
             mask = torch.zeros(B,size).cuda()
             
             C = 0
@@ -160,50 +162,52 @@ if __name__ == "__main__":
                 # R_std.append(R.std().item())
                 
                 # greedy validation
-                
-                tour_len = 0
 
-                X = X_val
-                X = torch.Tensor(X).cuda()
-                
-                mask = torch.zeros(B_val,size).cuda()
-                
-                R = 0
-                logprobs = 0
-                Idx = []
-                reward = 0
-                
-                Y = X.view(B_val, size, 2)    # to the same batch size
-                x = Y[:,0,:]
-                h = None
-                c = None
-                
-                for k in range(size):
-                    
-                    output, h, c, hidden_u = model(x=x, X_all=X, h=h, c=c, mask=mask)
-                    
-                    sampler = torch.distributions.Categorical(output)
-                    # idx = sampler.sample()
-                    idx = torch.argmax(output, dim=1)
-                    Idx.append(idx.data)
-                
-                    Y1 = Y[[i for i in range(B_val)], idx.data]
-                    
-                    if k == 0:
-                        Y_ini = Y1.clone()
-                    if k > 0:
-                        reward = torch.norm(Y1-Y0, dim=1)
-            
-                    Y0 = Y1.clone()
-                    x = Y[[i for i in range(B_val)], idx.data]
-                    
-                    R += reward
-                    
-                    mask[[i for i in range(B_val)], idx.data] += -np.inf
-            
-                R += torch.norm(Y1-Y_ini, dim=1)
-                tour_len += R.mean().item()
-                print('validation tour length:', tour_len)
+        # 验证
+        model.eval()
+        tour_len = 0
+
+        X = X_val
+        X = torch.Tensor(X).cuda()
+
+        mask = torch.zeros(B_val,size).cuda()
+
+        R = 0
+        logprobs = 0
+        Idx = []
+        reward = 0
+
+        Y = X.view(B_val, size, 2)    # to the same batch size
+        x = Y[:,0,:]
+        h = None
+        c = None
+
+        for k in range(size):
+
+            output, h, c, hidden_u = model(x=x, X_all=X, h=h, c=c, mask=mask)
+
+            sampler = torch.distributions.Categorical(output)
+            # idx = sampler.sample()
+            idx = torch.argmax(output, dim=1)
+            Idx.append(idx.data)
+
+            Y1 = Y[[i for i in range(B_val)], idx.data]
+
+            if k == 0:
+                Y_ini = Y1.clone()
+            if k > 0:
+                reward = torch.norm(Y1-Y0, dim=1)
+
+            Y0 = Y1.clone()
+            x = Y[[i for i in range(B_val)], idx.data]
+
+            R += reward
+
+            mask[[i for i in range(B_val)], idx.data] += -np.inf
+
+        R += torch.norm(Y1-Y_ini, dim=1)
+        tour_len += R.mean().item()
+        print('validation tour length:', tour_len)
 
         print('save model to: ', save_root)
         torch.save(model, save_root)
