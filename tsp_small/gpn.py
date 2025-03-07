@@ -80,7 +80,6 @@ class LSTM(nn.Module):
 
 
 class GPN(torch.nn.Module):
-
     def __init__(self, n_feature, n_hidden):
         super(GPN, self).__init__()
         self.city_size = 0
@@ -161,8 +160,8 @@ class GPN(torch.nn.Module):
         # X_all = X_all - x_expand
 
         # the weights share across all the cities
-        x = self.embedding_x(x)
-        context = self.embedding_all(X_all)
+        x = self.embedding_x(x)  # [batch_size, n_hidden]
+        context = self.embedding_all(X_all)  # [batch_size, size, n_hidden]
 
         # =============================
         # process hidden variable
@@ -174,26 +173,30 @@ class GPN(torch.nn.Module):
 
         if first_turn:
             # (dim) -> (B, dim)
-
-            h0 = self.h0.unsqueeze(0).expand(self.batch_size, self.dim)
+            h0 = self.h0.unsqueeze(0).expand(self.batch_size, self.dim)  # [batch_size, n_hidden]
             c0 = self.c0.unsqueeze(0).expand(self.batch_size, self.dim)
 
-            h0 = h0.unsqueeze(0).contiguous()
-            c0 = c0.unsqueeze(0).contiguous()
+            h0 = h0.unsqueeze(0).contiguous()  # contiguous()拷贝一份
+            c0 = c0.unsqueeze(0).contiguous()  # [1, batch_size, n_hidden]
 
-            input_context = context.permute(1, 0, 2).contiguous()
+            input_context = context.permute(1, 0, 2).contiguous()  # permute()将维度换位 [size, batch_size, n_hidden]
             _, (h_enc, c_enc) = self.lstm0(input_context, (h0, c0))
+            # 官方的LSTM输入由两部分组成：input、(初始的隐状态h_0，初始的单元状态c_0)
+            # input [seq_len, batch_size, input_size]
+            # h_0, c_0 [num_directions*num_layers, batch_size, hidden_size]
+            # 输出也由两部分组成：output、(隐状态h_n，单元状态c_n)
+            # output [seq_len, batch_size, num_directions*hidden_size]
+            # h_n和c_n的shape保持不变
 
             # let h0, c0 be the hidden variable of first turn
-            h = h_enc.squeeze(0)
+            h = h_enc.squeeze(0)  # [batch_size, n_hidden]
             c = c_enc.squeeze(0)
 
         # =============================
         # graph neural network encoder
         # =============================
 
-        # (B, size, dim)
-        context = context.view(-1, self.dim)
+        context = context.view(-1, self.dim)  # [size*batch_size, n_hidden]
 
         context = self.r1 * self.W1(context) \
                   + (1 - self.r1) * F.relu(self.agg_1(context))
